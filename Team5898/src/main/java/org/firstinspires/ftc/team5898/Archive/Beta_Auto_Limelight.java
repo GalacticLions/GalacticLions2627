@@ -1,29 +1,28 @@
 package org.firstinspires.ftc.team5898;
 
+import com.qualcomm.hardware.limelightvision.LLResult;
 import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
-import com.qualcomm.robotcore.eventloop.opmode.Disabled;
+import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
+import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.hardware.CRServo;
+import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.IMU;
-import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
-import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
-import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.YawPitchRollAngles;
 import org.firstinspires.ftc.team5898.Constants.CannonConstants;
-import org.firstinspires.ftc.team5898.Constants.SlideConstants;
 import org.firstinspires.ftc.team5898.LimelightUtils.VisualServoing;
-@Disabled
-@Autonomous(name = "Alpha Auto", group = "Alpha", preselectTeleOp = "Alpha TeleOP")
-public class Alpha_Auto extends LinearOpMode {
+
+@Autonomous(name = "Beta Auto", group = "Beta", preselectTeleOp = "Beta TeleOP (PID)")
+public class Beta_Auto_Limelight extends LinearOpMode {
     // variable declaration & setup
-    DcMotor frontLeft, frontRight, backLeft, backRight,leftSlide,rightSlide;
+    DcMotor frontLeft, frontRight, backLeft, backRight,leftSlide,rightSlide, frontIntake;
     DcMotorEx topLauncher, bottomLauncher;
-    CRServo cannonRight, cannonLeft;
+
 
     // motor counts per rotation (ticks/pulses per rotation)
     // check motor specs from manufacturer
@@ -46,17 +45,21 @@ public class Alpha_Auto extends LinearOpMode {
     double strafeBias = 0.9;// change to adjust only strafing movement
     //
     double conversion = cpi * bias;
-    final double LaunchVelocity_alt = 1750.0,LaunchVelocity = 2050.0;
+    final double LaunchVelocity = CannonConstants.FRONT_LAUNCH_VELOCITY;
     double intakePower = CannonConstants.IntakePower;
     IMU imu;
     Limelight3A limelight;
     String side_switch;
-    CRServo frontServo, backLeftServo, backRightServo;
+    CRServo backLeftServo, backRightServo;
 
-    double LAUNCH_VELOCITY, LAUNCH_VELOCITY_ALT;
+    double LAUNCH_VELOCITY;
 
     VisualServoing visualServoing;
 
+    Double P = CannonConstants.kP;
+    Double I = CannonConstants.kI;
+    Double D = CannonConstants.kD;
+    Double F = CannonConstants.kF;
 
     @Override
     public void runOpMode() {
@@ -65,7 +68,7 @@ public class Alpha_Auto extends LinearOpMode {
         intakePower = CannonConstants.IntakePower;
 
         // Set target velocities in Ticks Per Second. These are example values and will need tuning.
-        LAUNCH_VELOCITY = CannonConstants.LAUNCH_VELOCITY;
+        LAUNCH_VELOCITY = CannonConstants.FRONT_LAUNCH_VELOCITY;
 
 
         //Limelight Init
@@ -80,10 +83,10 @@ public class Alpha_Auto extends LinearOpMode {
         frontRight = hardwareMap.get(DcMotor.class, "FR");
         backLeft = hardwareMap.get(DcMotor.class, "BL");
         backRight = hardwareMap.get(DcMotor.class, "BR");
-        leftSlide = hardwareMap.get(DcMotor.class, "LS");
-        rightSlide = hardwareMap.get(DcMotor.class, "RS");
-        topLauncher = hardwareMap.get(DcMotorEx.class, "TLauncher");
-        bottomLauncher = hardwareMap.get(DcMotorEx.class, "BLauncher");
+//        leftSlide = hardwareMap.get(DcMotor.class, "LS");
+//        rightSlide = hardwareMap.get(DcMotor.class, "RS");
+        topLauncher = hardwareMap.get(DcMotorEx.class, "TLaunch");
+        bottomLauncher = hardwareMap.get(DcMotorEx.class, "BLaunch");
         frontLeft.setDirection(DcMotor.Direction.REVERSE);
         backLeft.setDirection(DcMotor.Direction.REVERSE);
         frontRight.setDirection(DcMotor.Direction.FORWARD);
@@ -108,26 +111,25 @@ public class Alpha_Auto extends LinearOpMode {
 
         //TODO: Tune PID for new Robot
         topLauncher.setPIDFCoefficients(DcMotorEx.RunMode.RUN_USING_ENCODER,
-                new PIDFCoefficients(250, 0.6, 21, 15));
+                new PIDFCoefficients(P, I, D, F));
         bottomLauncher.setPIDFCoefficients(DcMotorEx.RunMode.RUN_USING_ENCODER,
-                new PIDFCoefficients(250, 0.6, 21, 15));
+                new PIDFCoefficients(P, I, D, F));
 
         // Set zero power behavior to FLOAT for launchers (reduces resistance)
         topLauncher.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
         bottomLauncher.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
 
-        leftSlide.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        rightSlide.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        rightSlide.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-        leftSlide.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-        leftSlide.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        rightSlide.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        frontServo = hardwareMap.get(CRServo.class, "IntServo");
+//        leftSlide.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+//        rightSlide.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+//        rightSlide.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+//        leftSlide.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+//        leftSlide.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+//        rightSlide.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        frontIntake = hardwareMap.get(DcMotor.class, "Intake");
         backLeftServo = hardwareMap.get(CRServo.class, "LServo");
         backRightServo = hardwareMap.get(CRServo.class, "RServo");
 
-        //TODO: Directions could be flipped for code below
-        frontServo.setDirection(DcMotorSimple.Direction.FORWARD);
+        frontIntake.setDirection(DcMotorSimple.Direction.FORWARD);
         backLeftServo.setDirection(DcMotorSimple.Direction.REVERSE);
         backRightServo.setDirection(DcMotorSimple.Direction.FORWARD);
 
@@ -156,34 +158,161 @@ public class Alpha_Auto extends LinearOpMode {
             }
         }
         waitForStart();
-        leftSlide.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        rightSlide.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-//        initGyro();
-//        back(49,0.6);
-//        sleep(1000);
-//        strafeLeft(1.2,0.3);
-//        sleep(500);
-//        topLauncher.setVelocity(LaunchVelocity_alt);
-//        bottomLauncher.setPower(-LaunchVelocity);
-//        sleep(500);
-//        cannonLeft.setPower(-intakePower);
-//        cannonRight.setPower(-intakePower);
-//        sleep(6500);
-//        topLauncher.setPower(0);
-//        bottomLauncher.setPower(0);
-//        cannonLeft.setPower(0);
-//        cannonRight.setPower(0);
-//        sleep(500);
-//        if ("blue".equals(side_switch)) {
-//            strafeLeft(28, 1);
-//        }
-//        if ("red".equals(side_switch)){
-//            strafeRight(28, 1);
-//        }
-//        sleep(500);
+//        leftSlide.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+//        rightSlide.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        initGyro();
+        backAndStartLauncher(33,.6);
+        sleep(500);
+        quickAlign(2);
+        setServoPower(1);
+        sleep(5000);
+        topLauncher.setPower(0);
+        bottomLauncher.setPower(0);
+        setServoPower(0);
+        sleep(500);
+
+        if("red".equals(side_switch)) {
+            turnRight(-40, .5);
+            sleep(500);
+            strafeRight(25, 0.5);
+            setServoPower(1);
+            forward(37,.3);
+            sleep(100);
+            setServoPower(0);
+            back(35,.5);
+            strafeLeft(24.5, 0.5);
+            turnLeft(-40,.5);
+            sleep(500);
+            setServoPower(-.1);
+            sleep(50);
+            topLauncher.setVelocity(-LAUNCH_VELOCITY);
+            bottomLauncher.setPower(-LAUNCH_VELOCITY);
+            forward(5,.5);
+            quickAlign(1);
+            setServoPower(1);
+            sleep(5000);
+            strafeLeft(15, 1);
+
+        }else if("blue".equals(side_switch)){
+            turnLeft(-40, .5);
+            sleep(500);
+            strafeLeft(24.5, 0.5);
+            setServoPower(1);
+            forward(40, .5);
+            sleep(100);
+            setServoPower(0);
+            back(35,.5);
+            strafeRight(24.5, 0.5);
+            turnRight(-40,.5);
+            sleep(500);
+            setServoPower(-.1);
+            sleep(50);
+            topLauncher.setVelocity(-LAUNCH_VELOCITY);
+            bottomLauncher.setPower(-LAUNCH_VELOCITY);
+            forward(5,.5);
+            quickAlign(1);
+            setServoPower(1);
+            sleep(5000);
+            strafeRight(15, 1);
+        }
+        sleep(1000);
         stop();
 
     }
+    public void setServoPower(double power){
+        frontIntake.setPower(power);
+        backLeftServo.setPower(power);
+        backRightServo.setPower(power);
+    }
+
+    /**
+     * Use visual servoing to align with AprilTag
+     * @param timeoutSeconds Maximum time to spend aligning
+     */
+    public void alignWithAprilTag(double timeoutSeconds) {
+        double startTime = getRuntime();
+
+        telemetry.addLine("Starting AprilTag alignment...");
+        telemetry.update();
+
+        while (opModeIsActive() && (getRuntime() - startTime) < timeoutSeconds) {
+            // Use the visual servoing to align
+            visualServoing.visualServo();
+
+            // Check if we're aligned (you can adjust these thresholds)
+            if (isAlignedWithTarget()) {
+                telemetry.addLine("Target aligned!");
+                telemetry.update();
+                break;
+            }
+
+            sleep(50); // Small delay to prevent overwhelming the system
+        }
+
+        // Stop all motors after alignment
+        stopDriveMotors();
+
+        if ((getRuntime() - startTime) >= timeoutSeconds) {
+            telemetry.addLine("Alignment timeout reached");
+        } else {
+            telemetry.addLine("Alignment complete");
+        }
+        telemetry.update();
+    }
+
+    /**
+     * Check if the robot is aligned with the target
+     * @return true if aligned within acceptable thresholds
+     */
+    public boolean isAlignedWithTarget() {
+        LLResult result = limelight.getLatestResult();
+        if (result != null && result.isValid()) {
+            double tx = result.getTx(); // Horizontal offset
+            double ty = result.getTy(); // Vertical offset
+
+            // Use the same thresholds as in VisualServoing class
+            boolean horizontallyAligned = Math.abs(tx) <= VisualServoing.HEADING_THRESHOLD;
+            boolean verticallyAligned = Math.abs(ty - VisualServoing.TARGET_TY) <= VisualServoing.DISTANCE_THRESHOLD;
+
+            telemetry.addData("tx (horizontal)", tx);
+            telemetry.addData("ty (vertical)", ty);
+            telemetry.addData("Horizontally Aligned", horizontallyAligned);
+            telemetry.addData("Vertically Aligned", verticallyAligned);
+
+            // For this auto, we primarily care about horizontal alignment
+            return horizontallyAligned;
+        }
+        return false;
+    }
+
+    /**
+     * Stop all drive motors
+     */
+    public void stopDriveMotors() {
+        frontLeft.setPower(0);
+        frontRight.setPower(0);
+        backLeft.setPower(0);
+        backRight.setPower(0);
+    }
+
+    public void backAndStartLauncher(double inches, double speed) {
+        topLauncher.setVelocity(-LaunchVelocity);
+        bottomLauncher.setPower(-LaunchVelocity);
+
+        back(inches, speed);
+    }
+
+
+
+    /**
+     * Simple visual servoing alignment that can be called anywhere in autonomous
+     * This is a simpler version that just aligns horizontally
+     * @param maxTime Maximum time in seconds to spend aligning
+     */
+    public void quickAlign(double maxTime) {
+        alignWithAprilTag(maxTime);
+    }
+
 
     /**
      * Use to make the robot go forward a number of inches

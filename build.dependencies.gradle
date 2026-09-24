@@ -18,10 +18,10 @@ dependencies {
     implementation 'org.firstinspires.ftc:FtcCommon:12.0.0'
     implementation 'org.firstinspires.ftc:Vision:12.0.0'
     implementation 'androidx.appcompat:appcompat:1.2.0'
-    implementation 'com.pedropathing:ftc:2.0.4'
+    implementation 'com.pedropathing:ftc:2.0.6'
     implementation 'com.pedropathing:telemetry:1.0.0'
     implementation 'com.acmerobotics.dashboard:dashboard:0.5.0'
     implementation 'page.j5155.AdvantageScope:lite:v26.0.0'
-    implementation "com.bylazar:fullpanels:1.0.10"
+    implementation 'com.bylazar:fullpanels:1.0.12'
 }
 

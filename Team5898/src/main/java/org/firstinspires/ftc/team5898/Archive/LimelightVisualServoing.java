@@ -1,5 +1,10 @@
 package org.firstinspires.ftc.team5898;
 
+import androidx.annotation.Discouraged;
+
+import com.bylazar.telemetry.PanelsTelemetry;
+import com.qualcomm.hardware.limelightvision.LLResult;
+import com.qualcomm.hardware.limelightvision.LLResultTypes;
 import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.Disabled;
@@ -8,12 +13,15 @@ import com.qualcomm.robotcore.hardware.DcMotor;
 
 import org.firstinspires.ftc.team5898.LimelightUtils.VisualServoing;
 
+
 @Disabled
 @Autonomous(name = "Limelight Visual Servoing", group = "Limelight")
 public class LimelightVisualServoing extends OpMode {
     Limelight3A limelight;
     DcMotor frontLeft, frontRight, backLeft, backRight;
     VisualServoing visualServoing;
+    LLResult Result;
+    PanelsTelemetry panelsTelemetry;
 
     @Override
     public void init() {
@@ -33,14 +41,18 @@ public class LimelightVisualServoing extends OpMode {
         backRight.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         limelight.pipelineSwitch(0);
         telemetry.setMsTransmissionInterval(11);
+        limelight.setPollRateHz(90);
         limelight.start();
-
         visualServoing = new VisualServoing(limelight, frontLeft, frontRight, backRight, backLeft, telemetry);
+
     }
 
     @Override
     public void loop() {
+        Result = limelight.getLatestResult();
         visualServoing.visualServo();
+        telemetry.addData("ta:",Result.getTa());
+        telemetry.update();
     }
 
     @Override

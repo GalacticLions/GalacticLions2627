@@ -2,6 +2,7 @@ package org.firstinspires.ftc.team5898;
 
 import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.CRServo;
@@ -13,25 +14,27 @@ import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.team5898.Constants.CannonConstants;
-import org.firstinspires.ftc.team5898.Constants.SlideConstants;
+
 import org.firstinspires.ftc.team5898.LimelightUtils.VisualServoing;
 
+
+@Disabled
 @TeleOp(name="Beta TeleOP (PID)", group="TeleOP")
 public class Beta_TeleOP_PID extends OpMode {
     Limelight3A limelight;
     DcMotor frontLeft, frontRight, backLeft, backRight, leftSlide, rightSlide;
     DcMotorEx topLauncher, bottomLauncher;
     VisualServoing visualServoing;
-    CRServo frontServo, backLeftServo, backRightServo;
+    CRServo backLeftServo, backRightServo;
+    DcMotor frontIntake;
     IMU imu;
-    Integer Offset,  errorThreshold, slideLeftTarget, slideRightTarget,slideLeftPosition, slideRightPosition,leftError,rightError;
-    Double slidePower, intakePower;
+    Double intakePower;
 
-    Double LAUNCH_VELOCITY, LAUNCH_VELOCITY_ALT;
-    int P;
-    Double I;
-    Double D;
-    Integer F;
+    Double LAUNCH_VELOCITY;
+    Double kP;
+    Double kI;
+    Double kD;
+    Double kF;
 
 
     @Override
@@ -39,20 +42,13 @@ public class Beta_TeleOP_PID extends OpMode {
         //Constants Init
         //Cannon Constants
         intakePower = CannonConstants.IntakePower;
-        Offset = SlideConstants.Offset;
-        //Slide Constants
-        slidePower = SlideConstants.movePower;
-        errorThreshold = SlideConstants.ErrorThreshold;
-
-        P = CannonConstants.P;
-        I = CannonConstants.I;
-        D = CannonConstants.D;
-        F = CannonConstants.F;
-
-
+        kP = CannonConstants.kP;
+        kI = CannonConstants.kI;
+        kD = CannonConstants.kD;
+        kF = CannonConstants.kF;
 
         // Set target velocities in Ticks Per Second. These are example values and will need tuning.
-        LAUNCH_VELOCITY = CannonConstants.LAUNCH_VELOCITY;
+        LAUNCH_VELOCITY = CannonConstants.FRONT_LAUNCH_VELOCITY;
 
         //Limelight Init
         limelight = hardwareMap.get(Limelight3A.class, "limelight");
@@ -66,10 +62,9 @@ public class Beta_TeleOP_PID extends OpMode {
         frontRight = hardwareMap.get(DcMotor.class, "FR");
         backLeft = hardwareMap.get(DcMotor.class, "BL");
         backRight = hardwareMap.get(DcMotor.class, "BR");
-        leftSlide = hardwareMap.get(DcMotor.class, "LS");
-        rightSlide = hardwareMap.get(DcMotor.class, "RS");
         topLauncher = hardwareMap.get(DcMotorEx.class, "TLaunch");
         bottomLauncher = hardwareMap.get(DcMotorEx.class, "BLaunch");
+        frontIntake = hardwareMap.get(DcMotor.class, "Intake");
         frontLeft.setDirection(DcMotor.Direction.REVERSE);
         backLeft.setDirection(DcMotor.Direction.REVERSE);
         frontRight.setDirection(DcMotor.Direction.FORWARD);
@@ -94,34 +89,24 @@ public class Beta_TeleOP_PID extends OpMode {
         // - If slow to reach target: increase P, increase F
         // - If steady-state error: increase I (start small, like 0.1-0.5)
 
-        //TODO: Tune PID for new Robot
-        topLauncher.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, new PIDFCoefficients(P, I, D, F));
-        bottomLauncher.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, new PIDFCoefficients(P, I, D, F));
+
+        topLauncher.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, new PIDFCoefficients(kP, kI, kD, kF));
+        bottomLauncher.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, new PIDFCoefficients(kP, kI, kD, kF));
 
         // Set zero power behavior to FLOAT for launchers (reduces resistance)
         topLauncher.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
         bottomLauncher.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
 
-//        leftSlide.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-//        rightSlide.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-//        rightSlide.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-//        leftSlide.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-//        leftSlide.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-//        rightSlide.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        slideLeftTarget = 0;
-        slideRightTarget = 0;
-        frontServo = hardwareMap.get(CRServo.class, "IntServo");
+
         backLeftServo = hardwareMap.get(CRServo.class, "LServo");
         backRightServo = hardwareMap.get(CRServo.class, "RServo");
 
-        //TODO: Directions could be flipped for code below
-        frontServo.setDirection(DcMotorSimple.Direction.REVERSE);
+        frontIntake.setDirection(DcMotorSimple.Direction.FORWARD);
         backLeftServo.setDirection(DcMotorSimple.Direction.REVERSE);
         backRightServo.setDirection(DcMotorSimple.Direction.FORWARD);
 
 
         //IMU Init for Field-Centric
-        //TODO: Double check for new robot
         imu = hardwareMap.get(IMU.class, "imu");
         IMU.Parameters parameters = new IMU.Parameters(new RevHubOrientationOnRobot(
                 RevHubOrientationOnRobot.LogoFacingDirection.RIGHT,
@@ -138,41 +123,9 @@ public class Beta_TeleOP_PID extends OpMode {
 
     @Override
     public void loop() {
-        P = CannonConstants.P;
-        I = CannonConstants.I;
-        D = CannonConstants.D;
-        F = CannonConstants.F;
-
-        //Slide Control System
-        slideLeftPosition = leftSlide.getCurrentPosition();
-        slideRightPosition = rightSlide.getCurrentPosition();
-
-        leftError = Math.abs(slideLeftTarget - slideLeftPosition);
-        rightError = Math.abs(slideRightTarget - slideRightPosition) ;
-
-//        if (gamepad1.dpad_up) {
-//            slideRightTarget -= 10;
-//            slideLeftTarget += 10;
-//        }
-
-        if (leftError >= 3) {
-            leftSlide.setTargetPosition(slideLeftTarget);
-            leftSlide.setMode(DcMotor.RunMode.RUN_TO_POSITION);
-            leftSlide.setPower(slidePower);
-        } else {
-            leftSlide.setPower(0.0);
-            leftSlide.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-        }
-
-        if (rightError >= 3) {
-            rightSlide.setTargetPosition(slideRightTarget);
-            rightSlide.setMode(DcMotor.RunMode.RUN_TO_POSITION);
-            rightSlide.setPower(slidePower);
-        } else {
-            rightSlide.setPower(0.0);
-            rightSlide.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-        }
-
+        kP = CannonConstants.kP;
+        kI = CannonConstants.kI;
+        kD = CannonConstants.kD;
 
 
         //VisualServoing: gamepad1.a
@@ -198,17 +151,26 @@ public class Beta_TeleOP_PID extends OpMode {
 
 
         if (gamepad2.right_stick_y > 0.3) {
-            backLeftServo.setPower(intakePower);
-            backRightServo.setPower(intakePower);
-            frontServo.setPower(intakePower);
-        } else if (gamepad2.right_stick_y < -0.3) {
             backLeftServo.setPower(-intakePower);
             backRightServo.setPower(-intakePower);
-            frontServo.setPower(-intakePower);
+            frontIntake.setPower(-intakePower);
+        } else if (gamepad2.right_stick_y < -0.3) {
+            backLeftServo.setPower(intakePower);
+            backRightServo.setPower(intakePower);
+            frontIntake.setPower(.7);
         }else {
             backLeftServo.setPower(0);
             backRightServo.setPower(0);
-            frontServo.setPower(0);
+            frontIntake.setPower(0);
+        }
+
+        if (gamepad2.dpad_down){
+            backLeftServo.setPower(intakePower-0.3);
+            backRightServo.setPower(intakePower-0.3);
+
+        }else if (gamepad2.dpad_up){
+            backLeftServo.setPower(-intakePower+0.3);
+            backRightServo.setPower(-intakePower+0.3);
         }
 
 
@@ -258,7 +220,6 @@ public class Beta_TeleOP_PID extends OpMode {
     @Override
     public void stop(){
         limelight.stop();
-        leftSlide.setPower(0);
-        rightSlide.setPower(0);
     }
 }
+
