@@ -8,3 +8,6 @@ pluginManagement {
 
 include ':FtcRobotController'
 include ':TeamCode'
+include ':Team5898'
+include ':Team18443'
+include ':Team26248'
