@@ -7,7 +7,7 @@ import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.robotcore.hardware.DcMotor;
 
 import org.firstinspires.ftc.robotcore.external.Telemetry;
-import org.firstinspires.ftc.team5898.Constants.Limelight;
+import org.firstinspires.ftc.team5898.Hardware.Constants.Limelight;
 
 import java.util.List;
 
